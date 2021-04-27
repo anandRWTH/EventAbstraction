@@ -1,0 +1,38 @@
+{% extends "index.html" %}
+
+{% block title %}Input Log{% endblock %}
+
+{% block content %}
+<h2>Upload the event log file</h2>
+<p>
+	{% with messages = get_flashed_messages() %}
+	  {% if messages %}
+		{% for message in messages %}
+		  <div class="alert alert-warning alert-dismissible">
+		    <button type="button" class="close" data-dismiss="alert">&times;</button>
+		    {{ message }}
+		  </div>
+		{% endfor %}
+	  {% endif %}
+	{% endwith %}
+</p>
+<form method="POST" action="/" enctype="multipart/form-data">
+	<div class="form-group">
+		<div class="custom-file">
+			<input type="file" name="file" autocomplete="off" id="myInput" class="custom-file-input">
+			<label class="custom-file-label">Select log...</label>
+		</div>
+	</div>
+	<button type="submit" class="btn btn-primary" value="Upload">Upload</button>
+</form>
+
+
+<script>
+document.querySelector('.custom-file-input').addEventListener('change',function(e){
+  var fileName = document.getElementById("myInput").files[0].name;
+  var nextSibling = e.target.nextElementSibling
+  nextSibling.innerText = fileName
+})
+</script>
+
+{% endblock %}

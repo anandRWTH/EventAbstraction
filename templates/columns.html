@@ -1,0 +1,88 @@
+{% extends "index.html" %}
+
+{% block title %}Map Columns{% endblock %}
+
+{% block content %}
+
+<script type="text/javascript">// <![CDATA[
+        function loading(){
+            $("#loading").show();
+            $("#content").hide();
+        }
+// ]]></script>
+
+<style type="text/css">
+div#loading {
+    width: 35px;
+    height: 35px;
+    display: none;
+    background: url(/static/loader.gif) no-repeat;
+    cursor: wait;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    }
+</style>
+
+<div id="content">
+<h2>Select property for CSV Columns</h2>
+<p>
+	{% with messages = get_flashed_messages() %}
+	  {% if messages %}
+		{% for message in messages %}
+		  <div class="alert alert-warning alert-dismissible">
+		    <button type="button" class="close" data-dismiss="alert">&times;</button>
+		    {{ message }}
+		  </div>
+		{% endfor %}
+	  {% endif %}
+	{% endwith %}
+</p>
+
+<form method="POST" action="/map">
+    <label class="control-label col-sm-6"> ID Column </label>
+
+    <select name="id_column" required>
+        <option selected="selected" disabled="disabled" value="">Choose an option</option>
+        {% for x in columns %}
+        <option value="{{x}}">{{x}}</option>
+        {% endfor %}
+    </select>
+    <br>
+
+    <label class="control-label col-sm-6"> Activity Column </label>
+
+    <select name="activity_column" required>
+        <option selected="selected" disabled="disabled" value="">Choose an option</option>
+        {% for x in columns %}
+        <option value="{{x}}">{{x}}</option>
+        {% endfor %}
+    </select>
+    <br>
+
+    <label class="control-label col-sm-6"> Date Column </label>
+
+    <select name="date_column" required>
+        <option selected="selected" disabled="disabled" value="">Choose an option</option>
+        {% for x in columns %}
+        <option value="{{x}}">{{x}}</option>
+        {% endfor %}
+    </select>
+    <br>
+
+    <label class="control-label col-sm-6"> Start Timestamp Column </label>
+
+    <select name="start_column" required>
+        <option selected="selected" disabled="disabled" value="">Choose an option</option>
+        {% for x in columns %}
+        <option value="{{x}}">{{x}}</option>
+        {% endfor %}
+    </select>
+    <br>
+        <button type="submit" class="btn btn-primary" onclick="loading()" value="Submit">Submit</button>
+
+</form>
+</div>
+<div id="loading"></div>
+
+{% endblock %}
