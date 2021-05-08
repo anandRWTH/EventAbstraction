@@ -20,7 +20,6 @@ def preprocess_eventdata(df):
     event_list = df[activities_column].unique()
     df[activities_column] = df[activities_column].astype('category')
     df[[activities_column]] = df[[activities_column]].apply(lambda x: x.cat.codes)
-    print(np.array(event_list))
 
     return len(event_list), df
 
@@ -41,7 +40,6 @@ def build_model_params(df):
         observations_list.extend(flat_list)
         lengths_list.append(len(flat_list))
 
-    print(np.array(lengths_list))
     # print(np.array(trace_dict['1-740866708']).reshape(-1, 1))
     return np.vstack(observations_list), np.array(lengths_list), trace_dict
 
@@ -51,8 +49,9 @@ def build_model_params(df):
 def find_copy_csv_file(path_to_dir, suffix=".csv"):
     filenames = os.listdir(path_to_dir)
     csv_list = []
+    data_path = os.path.join(os.path.dirname(__file__), 'data')
     for name in filenames:
-        if name.endswith(suffix):
+        if name.endswith(suffix) and name.startswith("og"):
             shutil.copy(os.path.join(path_to_dir, name), data_path)
             name = os.path.splitext(os.path.basename(name))[0]
             csv_list.append(name)
@@ -70,6 +69,8 @@ def build_cluster_hierarchy(df, csv_file):
 
     output["null"] = file_name
 
+    cluster_path = os.path.join(os.path.dirname(__file__), 'cluster')
+
     while threshold_condition:
 
         if len(df) > 1:
@@ -86,7 +87,7 @@ def build_cluster_hierarchy(df, csv_file):
             if scores:
                 cluster_max = max(scores, key=scores.get)
                 if scores[cluster_max] > threshold_value:
-                    src_path = cluster_path + file_name + "_c" + str(cluster_max)
+                    src_path = os.path.join(cluster_path, file_name + "_c" + str(cluster_max))
                     temp_list = find_copy_csv_file(src_path)
                     print(temp_list) #['og_c2_1', 'og_c2_0']
                     output[file_name] = temp_list
@@ -98,13 +99,15 @@ def build_cluster_hierarchy(df, csv_file):
         print(output)
 
         if csv_list:
-            csv_file = open(data_path + csv_list[0] + ".csv")
+            dir_path = os.path.join(os.path.dirname(__file__), 'data')
+            csv_file = open(os.path.join(dir_path, csv_list[0] + ".csv"))
             df = pd.read_csv(csv_file, engine='python', delimiter=',')
             df.rename(columns={'case:concept:name': id_column, 'time:timestamp': date_column}, inplace=True)
             df.drop('abstracted', axis=1, inplace=True)
         else:
             threshold_condition = False
     tree = get_nodes("og", "null", output)
+    print(json.dumps(tree))
     return json.dumps(tree)
 
 def get_nodes(node, parent, data):
@@ -122,9 +125,25 @@ def get_nodes(node, parent, data):
     return d
 
 
-def build_hierarchical_json():
-    csv_file = open(og_data_file)
+def build_hierarchical_json(column):
+    print(og_data_file)
+    csv_file = open(os.path.join(os.path.dirname(__file__), 'uploads', 'og.csv'))
     df = pd.read_csv(csv_file, engine='python', delimiter=',')
+
+    df.rename(
+        columns={column['id_column']: 'case:concept:name', column['date_column']: 'time:timestamp',
+                 column['activities_column']: 'concept:name', column['start_timestamp']: 'start_timestamp'},
+        inplace=True)
+
+    cluster_path = os.path.join(os.path.dirname(__file__), 'cluster')
+
+    if not os.path.exists(cluster_path):
+        os.makedirs(cluster_path)
+
+    data_path = os.path.join(os.path.dirname(__file__), 'data')
+
+    if not os.path.exists(data_path):
+        os.makedirs(data_path)
 
     # df = pd.read_csv(og_data_file, engine='python', delimiter=';')
     # df[activities_column] = df['STAGE'] + " + " + df['ACTIVITY'];

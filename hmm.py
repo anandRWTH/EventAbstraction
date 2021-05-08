@@ -38,17 +38,17 @@ def bic_hmmlearn(X, lengths, clusters, trace_dict, df):
                                  Parameters.START_TIMESTAMP_KEY: start_timestamp,
                                  Parameters.TIMESTAMP_KEY: date_column}
 
-    event_log_train = log_converter.apply(event_df, parameters=log_conversion_parameters,
+    abstracted_log = log_converter.apply(event_df, parameters=log_conversion_parameters,
                                           variant=log_converter.Variants.TO_EVENT_LOG)
-    parent_tree = inductive_miner.apply_tree(event_log_train)
+    abstracted_parent = inductive_miner.apply_tree(abstracted_log)
 
-    gviz = pt_visualizer.apply(parent_tree,
+    gviz = pt_visualizer.apply(abstracted_parent,
                                parameters={pt_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png"})
     pt_visualizer.save(gviz, 'og.png')
 
     for cluster_num in cluster_range:
 
-        dir_path = cluster_path + file_name + "_c" + str(cluster_num)
+        dir_path = os.path.join(os.path.dirname(__file__), 'cluster', file_name + "_c" + str(cluster_num))
         # os.chdir(dir_path)
         # os.mkdir(path)
 
@@ -67,6 +67,7 @@ def bic_hmmlearn(X, lengths, clusters, trace_dict, df):
             return {}
 
         clustered_df = abstracted_df.copy()
+        projected_df = abstracted_df.copy()
         parent_tree_param = {}
 
         if cluster_duplicate:
@@ -75,12 +76,14 @@ def bic_hmmlearn(X, lengths, clusters, trace_dict, df):
                 # global start_timestamp
                 constants.start_timestamp = 'start_timestamp'
                 abstracted_df[start_timestamp] = abstracted_df[date_column].copy()
-                abstracted_df = abstracted_df.groupby([id_column, 'abstracted'], as_index=False).agg(
+
+            projected_df = abstracted_df.groupby([id_column, 'abstracted'], as_index=False).agg(
                     {date_column: 'max', start_timestamp: 'min'})
-                abstracted_df = pd.merge(abstracted_df,
+            projected_df = pd.merge(projected_df,
                                          clustered_df[[id_column, date_column, 'abstracted', activities_column]],
                                          on=[id_column, date_column, 'abstracted'], how='left')
 
+            projected_df = projected_df.sort_values(by=[id_column, date_column])
             abstracted_df = abstracted_df.sort_values(by=[id_column, date_column])
             parent_tree_param = {log_converter.Variants.TO_EVENT_LOG.value.Parameters.CASE_ATTRIBUTE_PREFIX: 'case',
                                  log_converter.Variants.TO_EVENT_LOG.value.Parameters.CASE_ID_KEY: 'case:concept:name',
@@ -91,21 +94,29 @@ def bic_hmmlearn(X, lengths, clusters, trace_dict, df):
             abstracted_df = abstracted_df.sort_values(by=[id_column, start_timestamp])
             parent_tree_param = {Parameters.START_TIMESTAMP_KEY: start_timestamp}
 
+        projected_df.abstracted = projected_df.abstracted.astype(str)
+        projected_df.rename(
+            columns={id_column: 'case:concept:name', date_column: 'time:timestamp', 'abstracted': 'concept:name'},
+            inplace=True)
+
         abstracted_df.abstracted = abstracted_df.abstracted.astype(str)
         abstracted_df.rename(
             columns={id_column: 'case:concept:name', date_column: 'time:timestamp', 'abstracted': 'concept:name'},
             inplace=True)
 
+
         # define the name of the directory to be created
 
-        dir_path = cluster_path + file_name + "_c" + str(cluster_num)
+        dir_path = os.path.join(os.path.dirname(__file__), 'cluster', file_name + "_c" + str(cluster_num))
+        #dir_path = cluster_path + file_name + "_c" + str(cluster_num)
         # os.chdir(dir_path)
         # os.mkdir(path)
 
         if not os.path.exists(dir_path):
             os.makedirs(dir_path)
 
-        abstracted_df.to_csv('cluster' + str(cluster_num) + '.csv', encoding='utf-8', index=False)
+        projected_df.to_csv(os.path.join(dir_path, 'projected' + str(cluster_num) + '.csv'), encoding='utf-8', index=False)
+        abstracted_df.to_csv(os.path.join(dir_path, 'cluster' + str(cluster_num) + '.csv'), encoding='utf-8', index=False)
 
         # results_df.insert(cluster_num, abstracted_trace)
 
@@ -114,11 +125,26 @@ def bic_hmmlearn(X, lengths, clusters, trace_dict, df):
                                      Parameters.START_TIMESTAMP_KEY: start_timestamp,
                                      Parameters.TIMESTAMP_KEY: date_column}
 
-        event_log_train = log_converter.apply(abstracted_df, parameters=log_conversion_parameters,
+        abstracted_log = log_converter.apply(abstracted_df, parameters=log_conversion_parameters,
                                               variant=log_converter.Variants.TO_EVENT_LOG)
-        parent_tree = inductive_miner.apply_tree(event_log_train, parameters=parent_tree_param)
+        abstracted_parent = inductive_miner.apply_tree(abstracted_log, parameters=parent_tree_param)
 
-        gviz = pt_visualizer.apply(parent_tree,
+        projected_log = log_converter.apply(projected_df, parameters=log_conversion_parameters,
+                                              variant=log_converter.Variants.TO_EVENT_LOG)
+        projected_tree = inductive_miner.apply_tree(projected_log, parameters=parent_tree_param)
+
+        net, im, fm = pt_converter.apply(projected_tree)
+
+        parameters = {log_converter.Variants.TO_EVENT_LOG.value.Parameters.CASE_ATTRIBUTE_PREFIX: 'case',
+                      log_converter.Variants.TO_EVENT_LOG.value.Parameters.CASE_ID_KEY: 'case:concept:name'}
+
+        evaluate(event_df, net, im, fm, parameters, file_name + "_c" + str(cluster_num), "projected")
+
+        gviz = pt_visualizer.apply(projected_tree,
+                                   parameters={pt_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png"})
+        pt_visualizer.save(gviz, os.path.join(dir_path, 'projected_tree.png'))
+
+        gviz = pt_visualizer.apply(abstracted_parent,
                                    parameters={pt_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png"})
         pt_visualizer.save(gviz, os.path.join(dir_path, 'abstract_parent.png'))
 
@@ -129,7 +155,7 @@ def bic_hmmlearn(X, lengths, clusters, trace_dict, df):
             ahl = clustered_df.loc[clustered_df['abstracted'] == i].copy()
 
             tree_param = {Parameters.ACTIVITY_KEY: activities_column}
-            if cluster_duplicate:
+            if cluster_duplicate and False:
                 ahl = remove_cluster_duplicates(ahl)
                 tree_param = {Parameters.START_TIMESTAMP_KEY: start_timestamp,
                               Parameters.ACTIVITY_KEY: activities_column}
@@ -159,7 +185,7 @@ def bic_hmmlearn(X, lengths, clusters, trace_dict, df):
                                        parameters={pt_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png"})
             pt_visualizer.save(gviz, os.path.join(dir_path, 'ahl' + str(i) + '.png'))
 
-            merge_tree(parent_tree, cluster_tree, i)
+            merge_tree(abstracted_parent, cluster_tree, i)
 
             # new_row = {'Type': 'AHL'+str(i), 'Net': net, 'Initial Marking': initial_marking, 'Final Marking': final_marking}
             # append row to the dataframe
@@ -169,15 +195,15 @@ def bic_hmmlearn(X, lengths, clusters, trace_dict, df):
         parameters = {log_converter.Variants.TO_EVENT_LOG.value.Parameters.CASE_ATTRIBUTE_PREFIX: 'case',
                       log_converter.Variants.TO_EVENT_LOG.value.Parameters.CASE_ID_KEY: 'case:concept:name'}
 
-        gviz = pt_visualizer.apply(parent_tree,
+        gviz = pt_visualizer.apply(abstracted_parent,
                                    parameters={pt_visualizer.Variants.WO_DECORATION.value.Parameters.FORMAT: "png"})
         pt_visualizer.save(gviz, os.path.join(dir_path, 'merged_parent.png'))
 
-        net, im, fm = pt_converter.apply(parent_tree)
+        net, im, fm = pt_converter.apply(abstracted_parent)
 
         # pt_visualizer.view(gviz)
 
-        results_dict[cluster_num] = evaluate(event_df, net, im, fm, parameters, file_name)
+        results_dict[cluster_num] = evaluate(event_df, net, im, fm, parameters, file_name + "_c" + str(cluster_num), "abstracted")
         # results_dict[cluster_num] = ind_df
 
     return results_dict
@@ -216,7 +242,7 @@ def predict_cluster(trace_dict, abstracted_df, model):
     return abstracted_df
 
 
-def evaluate(event_df, net, initial_marking, final_marking, parameters, file_name):
+def evaluate(event_df, net, initial_marking, final_marking, parameters, file_name, type):
     event_log_model = log_converter.apply(event_df, parameters=parameters, variant=log_converter.Variants.TO_EVENT_LOG)
     fitness_dict = replay_fitness_evaluator.apply(event_log_model, net, initial_marking, final_marking,
                                                   variant=replay_fitness_evaluator.Variants.TOKEN_BASED)
@@ -229,7 +255,7 @@ def evaluate(event_df, net, initial_marking, final_marking, parameters, file_nam
     f1_score = (2 * fitness * prec) / (fitness + prec)
     score = (prec * 0.5) + (((simp + gen + fitness) / 3) * 0.5)
 
-    update_report(fitness, prec, gen, simp, f1_score, score, file_name)
+    update_report(fitness, prec, gen, simp, f1_score, score, file_name, type)
 
     print("Fitness: " + str(fitness))
     print("Precision: " + str(prec))
@@ -240,10 +266,10 @@ def evaluate(event_df, net, initial_marking, final_marking, parameters, file_nam
     return score
 
 
-def update_report(fitness, prec, gen, simp, f1_score, score, file_name):
+def update_report(fitness, prec, gen, simp, f1_score, score, file_name, type):
     with open('report.csv', mode='a+') as report:
         report_writer = csv.writer(report, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        report_writer.writerow([file_name, fitness, prec, gen, simp, f1_score, score])
+        report_writer.writerow([file_name, type, fitness, prec, gen, simp, f1_score, score])
 
 
 def remove_cluster_duplicates(ahl):

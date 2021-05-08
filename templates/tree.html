@@ -32,7 +32,7 @@
 
 <!-- load the d3.js library -->	
 <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
-	
+<script src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
 <script>
 
 var treeData = {
@@ -45,7 +45,7 @@ var treeData = {
 		    "parent": "OG",
 		    "disp": "0",
 		    "children": [
-		    	{	
+		    	{
 		    		"name": "OG_0_0",
 				    "parent": "OG_0",
 				    "disp": "0",
@@ -81,12 +81,12 @@ var treeData = {
 				    	}
 				    ]
 				},
-				{	
+				{
 		    		"name": "OG_0_2",
 				    "parent": "OG_0",
 				    "disp": "2",
 				},
-				{	
+				{
 		    		"name": "OG_0_3",
 				    "parent": "OG_0",
 				    "disp": "3",
@@ -117,7 +117,7 @@ var treeData = {
 		    "parent": "OG",
 		    "disp": "1",
 		    "children": [
-		    	{	
+		    	{
 		    		"name": "OG_1_0",
 				    "parent": "OG_1",
 				    "disp": "0",
@@ -142,7 +142,7 @@ treeData = JSON.parse({{tree_data|tojson|safe}})
 var margin = {top: 20, right: 120, bottom: 20, left: 120},
 	width = 960 - margin.right - margin.left,
 	height = 600 - margin.top - margin.bottom;
-	
+
 var i = 0,
 	duration = 750,
 	root;
@@ -170,46 +170,66 @@ var menu = contextMenu().items('View Model', 'View Scores', 'Update Algorithm');
 
 function contextMenu() {
     var height,
-        width, 
+        width,
         margin = 0.1, // fraction of width
-        items = [], 
-        rescale = false, 
+        items = [],
+        rescale = false,
         style = {
             'rect': {
                 'mouseout': {
-                    'fill': 'rgb(244,244,244)', 
-                    'stroke': 'white', 
+                    'fill': 'rgb(244,244,244)',
+                    'stroke': 'white',
                     'stroke-width': '1px'
-                }, 
+                },
                 'mouseover': {
                     'fill': 'rgb(200,200,200)'
                 }
-            }, 
+            },
             'text': {
-                'fill': 'steelblue', 
+                'fill': 'steelblue',
                 'font-size': '13'
             }
-        }; 
-    
-    function menu(x, y) {
-		
+        };
+
+    function menu(x, y, id) {
+
         d3.select('.context-menu').remove();
         scaleItems();
 
         // Draw the menu
         d3.select('svg')
-            .append('g').attr('class', 'context-menu')
+            .append('g').attr('class', 'context-menu').attr('id', id)
             .selectAll('tmp')
             .data(items).enter()
-            .append('g').attr('class', 'menu-entry')
+            .append('g').attr('class', 'menu-entry').attr('download', 'output.zip')
             .style({'cursor': 'pointer'})
-            .on('mouseover', function(){ 
+            .on('mouseover', function(){
                 d3.select(this).select('rect').style(style.rect.mouseover) })
-            .on('mouseout', function(){ 
+            .on('mouseout', function(){
                 d3.select(this).select('rect').style(style.rect.mouseout) })
-            .on('click', function(d){ console.log(d); return d; });
+            .on('click', function(d){
+                  var cluster = this.parentElement.id
+                  var req = new XMLHttpRequest();
+                  req.open("GET", "/getModel?id="+cluster, true);
+                  req.responseType = "blob";
 
-        
+                  req.onload = function (event) {
+                    var blob = req.response;
+                    console.log(blob.size);
+                    var link=document.createElement('a');
+                    link.href=window.URL.createObjectURL(blob);
+                    link.download=cluster+".zip";
+                    link.click();
+                  };
+
+                   req.send();
+                console.log(this.parentElement.id);
+                console.log(d);
+
+
+            });
+
+
         d3.selectAll('.menu-entry')
             .append('rect')
             .attr('x', x)
@@ -217,7 +237,7 @@ function contextMenu() {
             .attr('width', width)
             .attr('height', height)
             .style(style.rect.mouseout);
-        
+
         d3.selectAll('.menu-entry')
             .append('text')
             .text(function(d){ return d; })
@@ -234,7 +254,7 @@ function contextMenu() {
             });
 
     }
-    
+
     menu.items = function(e) {
         if (!arguments.length) return items;
         for (i in arguments) items.push(arguments[i]);
@@ -259,7 +279,7 @@ function contextMenu() {
             margin = margin * width;
             width =  width + 2 * margin;
             height = d3.max(z.map(function(x){ return x.height + margin / 2; }));
-            
+
             // cleanup
             d3.selectAll('.tmp').remove();
             rescale = false;
@@ -293,14 +313,14 @@ function update(source) {
 	  .attr("class", "node")
 	  .attr("transform", function(d) { return "translate(" + source.y0 + "," + source.x0 + ")"; })
 	  .on("click", click)
-	  
 
-  nodeEnter.on('contextmenu', function(d){ 
+
+  nodeEnter.on('contextmenu', function(d){
         d3.event.preventDefault();
         //menu(d,d3.mouse(this)[0], d3.mouse(this)[1]);
         console.log(d.id)
         console.log(d.name)
-        menu(d.y0 + 50, d.x0 + 35);
+        menu(d.y0 + 50, d.x0 + 35, d.folder);
     });
 
   nodeEnter.append("circle")
@@ -382,6 +402,13 @@ function click(d) {
   }
   update(d);
 }
+
+
+$(".menu-entry").click(function(){
+  // Holds the product ID of the clicked element
+  console.log($this);
+  console.log("Hello")
+});
 
 </script>
 
